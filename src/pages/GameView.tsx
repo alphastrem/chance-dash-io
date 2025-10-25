@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calendar, Coins, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
+type GameStatus = Database['public']['Enums']['game_status'];
+
 type Game = {
   id: string;
   name: string;
   code6: string;
-  status: string;
+  status: GameStatus;
   ticket_price_minor: number;
   draw_at: string;
   created_at: string;
@@ -53,7 +56,7 @@ export default function GameView() {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: GameStatus) => {
     switch (status) {
       case 'draft': return 'secondary';
       case 'open': return 'default';

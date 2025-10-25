@@ -6,12 +6,15 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import type { Database } from '@/integrations/supabase/types';
+
+type GameStatus = Database['public']['Enums']['game_status'];
 
 type Game = {
   id: string;
   name: string;
   code6: string;
-  status: string;
+  status: GameStatus;
   ticket_price_minor: number;
   draw_at: string;
   created_at: string;
@@ -63,7 +66,7 @@ export default function Dashboard() {
   const liveGames = games.filter(g => g.status === 'open' || g.status === 'locked').length;
   const completedGames = games.filter(g => g.status === 'drawn' || g.status === 'closed').length;
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: GameStatus) => {
     switch (status) {
       case 'draft': return 'secondary';
       case 'open': return 'default';
@@ -135,12 +138,12 @@ export default function Dashboard() {
             </Button>
           </Card>
         ) : (
-          <div className="space-y-4">
+            <div className="space-y-4">
             <h2 className="text-2xl font-bold">Your Games</h2>
             <div className="grid gap-4">
               {games.map((game) => (
                 <Card key={game.id} className="p-6 glass hover:glow transition-all cursor-pointer"
-                  onClick={() => navigate(`/game/${game.code6}`)}>
+                  onClick={() => navigate(`/manage-game/${game.id}`)}>
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <h3 className="text-xl font-bold mb-1">{game.name}</h3>
