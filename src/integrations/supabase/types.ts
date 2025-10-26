@@ -101,7 +101,9 @@ export type Database = {
           created_at: string
           created_by_user_id: string
           draw_at: string
+          has_manual_entries: boolean
           id: string
+          max_tickets: number
           name: string
           revealed_seed: string | null
           status: Database["public"]["Enums"]["game_status"]
@@ -114,7 +116,9 @@ export type Database = {
           created_at?: string
           created_by_user_id: string
           draw_at: string
+          has_manual_entries?: boolean
           id?: string
+          max_tickets?: number
           name: string
           revealed_seed?: string | null
           status?: Database["public"]["Enums"]["game_status"]
@@ -127,7 +131,9 @@ export type Database = {
           created_at?: string
           created_by_user_id?: string
           draw_at?: string
+          has_manual_entries?: boolean
           id?: string
+          max_tickets?: number
           name?: string
           revealed_seed?: string | null
           status?: Database["public"]["Enums"]["game_status"]

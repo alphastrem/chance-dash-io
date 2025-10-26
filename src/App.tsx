@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import CreateGame from "./pages/CreateGame";
 import GameView from "./pages/GameView";
 import ManageGame from "./pages/ManageGame";
+import DrawGame from "./pages/DrawGame";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/create-game" element={<CreateGame />} />
             <Route path="/game/:code" element={<GameView />} />
             <Route path="/manage-game/:id" element={<ManageGame />} />
+            <Route path="/draw/:id" element={<DrawGame />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

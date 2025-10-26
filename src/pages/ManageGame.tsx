@@ -9,9 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Trash2, Play, Lock, Award, Upload, UserPlus } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Play, Lock, Award, Upload, UserPlus, Sparkles, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { playerSchema, csvPlayerSchema } from '@/lib/validationSchemas';
 
 type GameStatus = Database['public']['Enums']['game_status'];
 
@@ -23,6 +25,8 @@ type Game = {
   ticket_price_minor: number;
   draw_at: string;
   created_by_user_id: string;
+  max_tickets: number;
+  has_manual_entries: boolean;
 };
 
 type Player = {
@@ -33,12 +37,20 @@ type Player = {
   phone?: string;
 };
 
+type Ticket = {
+  id: string;
+  number: number;
+  player_id: string;
+  game_id: string;
+};
+
 export default function ManageGame() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user, isHost } = useAuth();
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [formData, setFormData] = useState({
@@ -63,6 +75,7 @@ export default function ManageGame() {
     if (id) {
       fetchGame();
       fetchPlayers();
+      fetchTickets();
     }
   }, [id, isHost]);
 
@@ -104,6 +117,21 @@ export default function ManageGame() {
       setPlayers(data || []);
     } catch (error: any) {
       console.error('Error fetching players:', error);
+    }
+  };
+
+  const fetchTickets = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('game_id', id)
+        .order('number');
+
+      if (error) throw error;
+      setTickets(data || []);
+    } catch (error: any) {
+      console.error('Error fetching tickets:', error);
     }
   };
 
@@ -177,11 +205,39 @@ export default function ManageGame() {
     }
   };
 
+  const generateUniqueTicketNumber = (existingNumbers: number[], maxTickets: number): number => {
+    const availableNumbers = new Set<number>();
+    for (let i = 1; i <= maxTickets; i++) {
+      availableNumbers.add(i);
+    }
+    existingNumbers.forEach(num => availableNumbers.delete(num));
+    
+    const available = Array.from(availableNumbers);
+    return available[Math.floor(Math.random() * available.length)];
+  };
+
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate player data
+    const validation = playerSchema.safeParse(newPlayer);
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      toast.error(firstError.message);
+      return;
+    }
+
     try {
-      const { error } = await supabase
+      if (!game) return;
+
+      // Check if max tickets reached
+      if (tickets.length >= game.max_tickets) {
+        toast.error(`Maximum tickets (${game.max_tickets}) reached`);
+        return;
+      }
+
+      // Insert player
+      const { data: playerData, error: playerError } = await supabase
         .from('players')
         .insert({
           game_id: id,
@@ -189,13 +245,41 @@ export default function ManageGame() {
           last_name: newPlayer.lastName,
           email: newPlayer.email,
           phone: newPlayer.phone || null,
+        })
+        .select()
+        .single();
+
+      if (playerError) throw playerError;
+
+      // Generate unique ticket number
+      const existingNumbers = tickets.map(t => t.number);
+      const ticketNumber = generateUniqueTicketNumber(existingNumbers, game.max_tickets);
+
+      // Insert ticket
+      const { error: ticketError } = await supabase
+        .from('tickets')
+        .insert({
+          game_id: id,
+          player_id: playerData.id,
+          number: ticketNumber,
+          eligible: true,
         });
 
-      if (error) throw error;
+      if (ticketError) throw ticketError;
 
-      toast.success('Player added successfully');
+      // Mark game as having manual entries
+      if (!game.has_manual_entries) {
+        await supabase
+          .from('games')
+          .update({ has_manual_entries: true })
+          .eq('id', id);
+      }
+
+      toast.success(`Player added with ticket #${ticketNumber}`);
       setNewPlayer({ firstName: '', lastName: '', email: '', phone: '' });
       fetchPlayers();
+      fetchTickets();
+      fetchGame();
     } catch (error: any) {
       console.error('Error adding player:', error);
       toast.error(error.message || 'Failed to add player');
@@ -206,40 +290,106 @@ export default function ManageGame() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (game?.has_manual_entries) {
+      toast.error('Cannot upload CSV after manual entries have been added');
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
+        if (!game) return;
+
         const text = event.target?.result as string;
         const lines = text.split('\n').filter(line => line.trim());
         
         // Skip header row
         const dataLines = lines.slice(1);
         
-        const playersToInsert = dataLines.map(line => {
-          const [firstName, lastName, email, phone] = line.split(',').map(v => v.trim());
-          return {
-            game_id: id,
-            first_name: firstName,
-            last_name: lastName,
-            email: email,
+        // Validate CSV data
+        const validatedPlayers = [];
+        for (let i = 0; i < dataLines.length; i++) {
+          const [firstName, lastName, email, phone] = dataLines[i].split(',').map(v => v.trim());
+          
+          const validation = csvPlayerSchema.safeParse({
+            firstName,
+            lastName,
+            email,
+            phone: phone || undefined,
+          });
+
+          if (!validation.success) {
+            toast.error(`Row ${i + 2}: ${validation.error.errors[0].message}`);
+            return;
+          }
+
+          validatedPlayers.push({
+            firstName,
+            lastName,
+            email,
             phone: phone || null,
-          };
-        });
+          });
+        }
 
-        const { error } = await supabase
-          .from('players')
-          .insert(playersToInsert);
+        // Check if total would exceed max tickets
+        if (tickets.length + validatedPlayers.length > game.max_tickets) {
+          toast.error(`Cannot import: would exceed maximum tickets (${game.max_tickets})`);
+          return;
+        }
 
-        if (error) throw error;
+        // Insert players and generate tickets
+        const existingNumbers = tickets.map(t => t.number);
+        const availableNumbers = new Set<number>();
+        for (let i = 1; i <= game.max_tickets; i++) {
+          availableNumbers.add(i);
+        }
+        existingNumbers.forEach(num => availableNumbers.delete(num));
+        const numbersArray = Array.from(availableNumbers);
 
-        toast.success(`${playersToInsert.length} players imported successfully`);
+        for (const player of validatedPlayers) {
+          // Insert player
+          const { data: playerData, error: playerError } = await supabase
+            .from('players')
+            .insert({
+              game_id: id,
+              first_name: player.firstName,
+              last_name: player.lastName,
+              email: player.email,
+              phone: player.phone,
+            })
+            .select()
+            .single();
+
+          if (playerError) throw playerError;
+
+          // Assign sequential ticket number
+          const ticketNumber = numbersArray.shift();
+          if (!ticketNumber) throw new Error('No available ticket numbers');
+
+          // Insert ticket
+          const { error: ticketError } = await supabase
+            .from('tickets')
+            .insert({
+              game_id: id,
+              player_id: playerData.id,
+              number: ticketNumber,
+              eligible: true,
+            });
+
+          if (ticketError) throw ticketError;
+        }
+
+        toast.success(`${validatedPlayers.length} players imported with tickets`);
         fetchPlayers();
+        fetchTickets();
       } catch (error: any) {
         console.error('Error uploading CSV:', error);
         toast.error(error.message || 'Failed to import players');
       }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
   if (loading) {
@@ -323,11 +473,22 @@ export default function ManageGame() {
                 Lock Entries
               </Button>
             )}
-            {game.status === 'locked' && (
-              <Button onClick={() => handleStatusChange('drawn')} className="gap-2">
-                <Award className="h-4 w-4" />
-                Mark as Drawn
+            {game.status === 'locked' && tickets.length > 0 && (
+              <Button 
+                onClick={() => navigate(`/draw/${id}`)} 
+                className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              >
+                <Sparkles className="h-4 w-4" />
+                Start Draw
               </Button>
+            )}
+            {game.status === 'locked' && tickets.length === 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Add players and tickets before starting the draw
+                </AlertDescription>
+              </Alert>
             )}
           </div>
 
@@ -399,7 +560,12 @@ export default function ManageGame() {
             <TabsContent value="players" className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Add Players</h3>
+                  <div>
+                    <h3 className="text-lg font-semibold">Add Players</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {tickets.length} / {game.max_tickets} tickets assigned
+                    </p>
+                  </div>
                   <div>
                     <Input
                       type="file"
@@ -407,15 +573,31 @@ export default function ManageGame() {
                       onChange={handleCSVUpload}
                       className="hidden"
                       id="csv-upload"
+                      disabled={game.has_manual_entries}
                     />
                     <Label htmlFor="csv-upload" className="cursor-pointer">
-                      <Button type="button" variant="outline" className="gap-2" onClick={() => document.getElementById('csv-upload')?.click()}>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="gap-2" 
+                        onClick={() => document.getElementById('csv-upload')?.click()}
+                        disabled={game.has_manual_entries}
+                      >
                         <Upload className="h-4 w-4" />
                         Upload CSV
                       </Button>
                     </Label>
                   </div>
                 </div>
+
+                {game.has_manual_entries && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      CSV upload is disabled because manual entries have been added. This prevents ticket number conflicts.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <p className="text-sm text-muted-foreground">
                   CSV format: FirstName, LastName, Email, Phone (optional)
@@ -459,21 +641,31 @@ export default function ManageGame() {
                   <p className="text-muted-foreground">No players added yet</p>
                 ) : (
                   <div className="space-y-2">
-                    {players.map((player) => (
-                      <Card key={player.id} className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">
-                              {player.first_name} {player.last_name}
-                            </p>
-                            <p className="text-sm text-muted-foreground">{player.email}</p>
+                    {players.map((player) => {
+                      const playerTicket = tickets.find(t => t.player_id === player.id);
+                      return (
+                        <Card key={player.id} className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              {playerTicket && (
+                                <Badge variant="outline" className="text-lg font-bold px-3 py-1">
+                                  #{playerTicket.number}
+                                </Badge>
+                              )}
+                              <div>
+                                <p className="font-medium">
+                                  {player.first_name} {player.last_name}
+                                </p>
+                                <p className="text-sm text-muted-foreground">{player.email}</p>
+                              </div>
+                            </div>
+                            {player.phone && (
+                              <p className="text-sm text-muted-foreground">{player.phone}</p>
+                            )}
                           </div>
-                          {player.phone && (
-                            <p className="text-sm text-muted-foreground">{player.phone}</p>
-                          )}
-                        </div>
-                      </Card>
-                    ))}
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
               </div>

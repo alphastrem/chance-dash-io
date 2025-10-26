@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { gameSchema } from '@/lib/validationSchemas';
 
 export default function CreateGame() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ export default function CreateGame() {
   const [formData, setFormData] = useState({
     name: '',
     ticketPrice: '',
+    maxTickets: '100',
     drawDate: '',
     drawTime: '',
   });
@@ -32,11 +34,21 @@ export default function CreateGame() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form data
+    const validation = gameSchema.safeParse(formData);
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      toast.error(firstError.message);
+      return;
+    }
+
     setLoading(true);
 
     try {
       // Convert price to minor units (e.g., £2.50 -> 250)
       const ticketPriceMinor = Math.round(parseFloat(formData.ticketPrice) * 100);
+      const maxTickets = parseInt(formData.maxTickets);
       
       // Combine date and time
       const drawAt = new Date(`${formData.drawDate}T${formData.drawTime}`).toISOString();
@@ -63,6 +75,7 @@ export default function CreateGame() {
         .insert({
           name: formData.name,
           ticket_price_minor: ticketPriceMinor,
+          max_tickets: maxTickets,
           draw_at: drawAt,
           code6: code6,
           status: 'draft',
@@ -137,6 +150,23 @@ export default function CreateGame() {
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Enter the price per ticket in pounds
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="maxTickets">Maximum Tickets *</Label>
+              <Input
+                id="maxTickets"
+                type="number"
+                min="1"
+                value={formData.maxTickets}
+                onChange={(e) => setFormData({ ...formData, maxTickets: e.target.value })}
+                placeholder="e.g., 100"
+                required
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Maximum number of tickets that can be sold
               </p>
             </div>
 
