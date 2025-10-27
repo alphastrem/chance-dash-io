@@ -18,13 +18,14 @@ interface Winner {
 export default function DrawGame() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<'countdown' | 'spinning' | 'winner'>('countdown');
+  const [phase, setPhase] = useState<'countdown' | 'spinning' | 'winner' | 'redraw'>('countdown');
   const [maxTickets, setMaxTickets] = useState(0);
   const [winningNumber, setWinningNumber] = useState<number | null>(null);
   const [winner, setWinner] = useState<Winner | null>(null);
   const [wheels, setWheels] = useState<number[][]>([]);
   const [finalDigits, setFinalDigits] = useState<number[]>([]);
-  const [completedWheels, setCompletedWheels] = useState(0);
+  const [currentDigitIndex, setCurrentDigitIndex] = useState(0);
+  const [revealedDigits, setRevealedDigits] = useState<number[]>([]);
 
   useEffect(() => {
     fetchGameData();
@@ -104,16 +105,26 @@ export default function DrawGame() {
   };
 
   const handleWheelComplete = () => {
-    setCompletedWheels(prev => prev + 1);
-  };
-
-  useEffect(() => {
-    if (completedWheels === wheels.length && wheels.length > 0) {
+    setRevealedDigits(prev => [...prev, finalDigits[currentDigitIndex]]);
+    
+    if (currentDigitIndex < finalDigits.length - 1) {
+      setCurrentDigitIndex(prev => prev + 1);
+    } else {
+      // All digits revealed, check for winner
       setTimeout(() => {
         fetchWinner();
       }, 1000);
     }
-  }, [completedWheels, wheels.length]);
+  };
+
+  const handleRedraw = () => {
+    setPhase('countdown');
+    setCurrentDigitIndex(0);
+    setRevealedDigits([]);
+    setWinningNumber(null);
+    setWinner(null);
+    generateWheels(maxTickets);
+  };
 
   const fetchWinner = async () => {
     try {
@@ -126,7 +137,14 @@ export default function DrawGame() {
         .eq('number', winningNumber)
         .single();
 
-      if (ticketError) throw ticketError;
+      if (ticketError || !ticket) {
+        // No ticket found for this number - trigger redraw
+        setPhase('redraw');
+        setTimeout(() => {
+          handleRedraw();
+        }, 2000);
+        return;
+      }
 
       const { data: player, error: playerError } = await supabase
         .from('players')
@@ -190,30 +208,46 @@ export default function DrawGame() {
               <h1 className="text-4xl font-bold gradient-text mb-8">
                 Drawing Winning Number...
               </h1>
-              <div className="flex justify-center gap-6 flex-wrap">
-                {wheels.map((wheelNumbers, index) => (
+              <div className="flex justify-center">
+                {currentDigitIndex < wheels.length && (
                   <SpinningWheel
-                    key={index}
-                    numbers={wheelNumbers}
-                    finalNumber={finalDigits[index]}
+                    numbers={wheels[currentDigitIndex]}
+                    finalNumber={finalDigits[currentDigitIndex]}
                     onSpinComplete={handleWheelComplete}
-                    delay={index * 5000}
+                    isActive={true}
                   />
-                ))}
+                )}
               </div>
               <div className="flex justify-center gap-4 mt-8">
                 {finalDigits.map((digit, index) => (
                   <div
                     key={index}
                     className={`w-20 h-24 border-2 border-primary rounded-lg flex items-center justify-center text-4xl font-bold ${
-                      completedWheels > index ? 'gradient-text' : 'text-muted-foreground'
+                      index < revealedDigits.length ? 'gradient-text' : 'text-muted-foreground'
                     }`}
                   >
-                    {completedWheels > index ? digit : '?'}
+                    {index < revealedDigits.length ? revealedDigits[index] : '?'}
                   </div>
                 ))}
               </div>
             </div>
+          )}
+
+          {phase === 'redraw' && (
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="space-y-8"
+            >
+              <div className="bg-destructive/20 border-2 border-destructive rounded-xl p-12">
+                <h1 className="text-5xl font-bold text-destructive mb-4">
+                  No Ticket Found!
+                </h1>
+                <p className="text-2xl text-muted-foreground">
+                  Redrawing in 2 seconds...
+                </p>
+              </div>
+            </motion.div>
           )}
 
           {phase === 'winner' && winner && (

@@ -5,33 +5,33 @@ interface SpinningWheelProps {
   numbers: number[];
   finalNumber: number;
   onSpinComplete: () => void;
-  delay: number;
+  isActive: boolean;
 }
 
-export default function SpinningWheel({ numbers, finalNumber, onSpinComplete, delay }: SpinningWheelProps) {
+export default function SpinningWheel({ numbers, finalNumber, onSpinComplete, isActive }: SpinningWheelProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [displayNumber, setDisplayNumber] = useState(numbers[0]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsSpinning(true);
-      
-      // Rapid number changes during spin
-      const spinInterval = setInterval(() => {
-        setDisplayNumber(numbers[Math.floor(Math.random() * numbers.length)]);
-      }, 50);
+    if (!isActive) return;
 
-      // Stop spinning after 5 seconds
-      setTimeout(() => {
-        clearInterval(spinInterval);
-        setDisplayNumber(finalNumber);
-        setIsSpinning(false);
-        setTimeout(onSpinComplete, 300);
-      }, 5000);
-    }, delay);
+    setIsSpinning(true);
+    
+    // Rapid number changes during spin
+    const spinInterval = setInterval(() => {
+      setDisplayNumber(numbers[Math.floor(Math.random() * numbers.length)]);
+    }, 50);
 
-    return () => clearTimeout(timer);
-  }, [numbers, finalNumber, onSpinComplete, delay]);
+    // Stop spinning after 3 seconds
+    setTimeout(() => {
+      clearInterval(spinInterval);
+      setDisplayNumber(finalNumber);
+      setIsSpinning(false);
+      setTimeout(onSpinComplete, 300);
+    }, 3000);
+
+    return () => clearInterval(spinInterval);
+  }, [isActive, numbers, finalNumber, onSpinComplete]);
 
   return (
     <div className="flex flex-col items-center gap-4">
