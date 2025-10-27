@@ -1,37 +1,37 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
-interface SpinningWheelProps {
-  numbers: number[];
-  finalNumber: number;
-  onSpinComplete: () => void;
+interface SpinningWheelAnimationProps {
+  maxDigit: number;
+  finalDigit: number;
+  onComplete: () => void;
   isActive: boolean;
 }
 
-export default function SpinningWheel({ numbers, finalNumber, onSpinComplete, isActive }: SpinningWheelProps) {
+export default function SpinningWheelAnimation({ maxDigit, finalDigit, onComplete, isActive }: SpinningWheelAnimationProps) {
   const [isSpinning, setIsSpinning] = useState(false);
-  const [displayNumber, setDisplayNumber] = useState(numbers[0]);
+  const [displayNumber, setDisplayNumber] = useState(0);
 
   useEffect(() => {
     if (!isActive) return;
 
     setIsSpinning(true);
     
-    // Rapid number changes during spin
+    // Rapid number changes - cycle through all possible digits
     const spinInterval = setInterval(() => {
-      setDisplayNumber(numbers[Math.floor(Math.random() * numbers.length)]);
+      setDisplayNumber(Math.floor(Math.random() * (maxDigit + 1)));
     }, 50);
 
     // Stop spinning after 3 seconds
     setTimeout(() => {
       clearInterval(spinInterval);
-      setDisplayNumber(finalNumber);
+      setDisplayNumber(finalDigit);
       setIsSpinning(false);
-      setTimeout(onSpinComplete, 300);
+      setTimeout(onComplete, 300);
     }, 3000);
 
     return () => clearInterval(spinInterval);
-  }, [isActive, numbers, finalNumber, onSpinComplete]);
+  }, [isActive, maxDigit, finalDigit, onComplete]);
 
   return (
     <div className="flex flex-col items-center gap-4">

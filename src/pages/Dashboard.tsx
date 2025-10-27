@@ -1,11 +1,14 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Plus, LogOut, Calendar, Coins } from 'lucide-react';
+import { Plus, LogOut, Calendar, Coins, Settings, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 
 type GameStatus = Database['public']['Enums']['game_status'];
@@ -25,12 +28,32 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
+  const [animationType, setAnimationType] = useState<string>('spinning_wheel');
 
   useEffect(() => {
     if (isHost && user) {
       fetchGames();
+      fetchUserProfile();
     }
   }, [isHost, user]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('animation_type')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      if (data?.animation_type) {
+        setAnimationType(data.animation_type);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    }
+  };
 
   const fetchGames = async () => {
     try {
@@ -45,6 +68,23 @@ export default function Dashboard() {
       console.error('Error fetching games:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAnimationChange = async (value: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ animation_type: value })
+        .eq('id', user?.id);
+
+      if (error) throw error;
+      
+      setAnimationType(value);
+      toast.success('Animation preference updated');
+    } catch (error) {
+      console.error('Error updating animation:', error);
+      toast.error('Failed to update animation preference');
     }
   };
 
@@ -89,6 +129,10 @@ export default function Dashboard() {
           </div>
           
           <div className="flex gap-3">
+            <Button onClick={() => setShowSettings(!showSettings)} variant="outline" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Settings
+            </Button>
             <Button onClick={() => navigate('/create-game')} className="gap-2">
               <Plus className="h-4 w-4" />
               Create Game
@@ -99,6 +143,32 @@ export default function Dashboard() {
             </Button>
           </div>
         </div>
+        
+        {showSettings && (
+          <Card className="p-6 glass mb-8">
+            <h2 className="text-2xl font-bold mb-4">Draw Animation Settings</h2>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="animation-type">Animation Style</Label>
+                <Select value={animationType} onValueChange={handleAnimationChange}>
+                  <SelectTrigger id="animation-type">
+                    <SelectValue placeholder="Select animation style" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="spinning_wheel">Spinning Wheel</SelectItem>
+                    <SelectItem value="slot_machine">Slot Machine</SelectItem>
+                    <SelectItem value="roulette">Roulette</SelectItem>
+                    <SelectItem value="lottery_balls">Lottery Balls</SelectItem>
+                    <SelectItem value="flip_counter">Flip Counter</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground mt-2">
+                  This animation will be used for all your future draws
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card className="p-6 glass">

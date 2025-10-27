@@ -182,18 +182,21 @@ export type Database = {
       }
       profiles: {
         Row: {
+          animation_type: string
           created_at: string
           id: string
           updated_at: string
           username: string
         }
         Insert: {
+          animation_type?: string
           created_at?: string
           id: string
           updated_at?: string
           username: string
         }
         Update: {
+          animation_type?: string
           created_at?: string
           id?: string
           updated_at?: string

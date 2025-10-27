@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Trash2, Play, Lock, Award, Upload, UserPlus, Sparkles, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Play, Lock, Award, Upload, UserPlus, Sparkles, AlertTriangle, Copy, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { playerSchema, csvPlayerSchema } from '@/lib/validationSchemas';
 
@@ -458,6 +458,41 @@ export default function ManageGame() {
             <Badge variant="outline" className="text-lg px-4 py-2">
               {game.status}
             </Badge>
+          </div>
+
+          <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold mb-1">Player View Link</h3>
+                <p className="text-xs text-muted-foreground mb-2">Share this link with participants to watch the draw</p>
+                <div className="flex items-center gap-2">
+                  <code className="text-sm bg-background px-3 py-1 rounded border">
+                    {window.location.origin}/player/{game.code6}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/player/${game.code6}`);
+                      toast.success('Link copied to clipboard');
+                    }}
+                    className="gap-2"
+                  >
+                    <Copy className="h-3 w-3" />
+                    Copy
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(`/player/${game.code6}`, '_blank')}
+                    className="gap-2"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2 mb-6">
