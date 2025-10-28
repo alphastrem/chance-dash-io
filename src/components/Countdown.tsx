@@ -6,7 +6,7 @@ interface CountdownProps {
 }
 
 export default function Countdown({ onComplete }: CountdownProps) {
-  const [count, setCount] = useState(10);
+  const [count, setCount] = useState(5);
 
   useEffect(() => {
     if (count === 0) {

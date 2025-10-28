@@ -41,7 +41,7 @@ export default function DrawGame() {
     try {
       const { data: game, error } = await supabase
         .from('games')
-        .select('max_tickets, created_by_user_id, profiles(animation_type)')
+        .select('max_tickets, created_by_user_id')
         .eq('id', id)
         .single();
 
@@ -50,9 +50,14 @@ export default function DrawGame() {
       setMaxTickets(game.max_tickets);
       
       // Get the host's animation preference
-      const hostProfile = game.profiles as any;
-      if (hostProfile?.animation_type) {
-        setAnimationType(hostProfile.animation_type);
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('animation_type')
+        .eq('id', game.created_by_user_id)
+        .single();
+      
+      if (profile?.animation_type) {
+        setAnimationType(profile.animation_type);
       }
       
       generateWheels(game.max_tickets);
