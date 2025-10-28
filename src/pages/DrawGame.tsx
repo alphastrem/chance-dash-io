@@ -95,8 +95,9 @@ export default function DrawGame() {
     const wheelsData: number[][] = [];
 
     for (let i = 0; i < numDigits; i++) {
-      const maxDigit = parseInt(maxStr[i]);
-      wheelsData.push([maxDigit]); // Store max digit for each position
+      // First digit uses the actual max digit, rest use 9
+      const maxDigit = i === 0 ? parseInt(maxStr[i]) : 9;
+      wheelsData.push([maxDigit]);
     }
 
     setWheels(wheelsData);
