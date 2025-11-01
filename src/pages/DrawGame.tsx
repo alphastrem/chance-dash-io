@@ -32,6 +32,7 @@ export default function DrawGame() {
   const [revealedDigits, setRevealedDigits] = useState<number[]>([]);
   const [animationType, setAnimationType] = useState<string>('spinning_wheel');
   const [winnerCheckTimeout, setWinnerCheckTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [drawKey, setDrawKey] = useState(0);
 
   useEffect(() => {
     fetchGameData();
@@ -119,7 +120,9 @@ export default function DrawGame() {
     if (currentDigitIndex < finalDigits.length - 1) {
       setCurrentDigitIndex(prev => prev + 1);
     } else {
-      // All digits revealed, check for winner
+      // All digits revealed - increment to stop rendering animation
+      setCurrentDigitIndex(prev => prev + 1);
+      // Check for winner after a short delay
       const timeout = setTimeout(() => {
         fetchWinner();
       }, 1000);
@@ -134,6 +137,8 @@ export default function DrawGame() {
       setWinnerCheckTimeout(null);
     }
     
+    // Increment draw key to force fresh animation state
+    setDrawKey(prev => prev + 1);
     setCurrentDigitIndex(0);
     setRevealedDigits([]);
     setWinningNumber(null);
@@ -220,7 +225,7 @@ export default function DrawGame() {
           )}
 
           {phase === 'spinning' && (
-            <div className="space-y-8">
+            <div className="space-y-8" key={drawKey}>
               <h1 className="text-4xl font-bold gradient-text mb-8">
                 Drawing Winning Number...
               </h1>
