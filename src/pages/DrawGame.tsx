@@ -296,7 +296,7 @@ export default function DrawGame() {
               animate={{ scale: 1, opacity: 1 }}
               className="space-y-8"
             >
-              <div className="bg-gradient-to-br from-destructive/30 to-destructive/10 border-4 border-destructive rounded-2xl p-20 relative overflow-hidden shadow-2xl">
+              <div className="bg-gradient-to-br from-destructive/30 to-destructive/10 border-4 border-destructive rounded-2xl p-12 relative overflow-hidden shadow-2xl">
                 <motion.div
                   className="absolute inset-0 bg-destructive/20"
                   animate={{ 
@@ -306,14 +306,14 @@ export default function DrawGame() {
                   transition={{ duration: 0.6, repeat: 2 }}
                 />
                 <motion.h1 
-                  className="text-8xl font-bold text-destructive mb-8 relative z-10"
+                  className="text-4xl md:text-5xl lg:text-6xl font-bold text-destructive mb-6 relative z-10"
                   animate={{ scale: [1, 1.1, 1] }}
                   transition={{ duration: 0.6, repeat: 2 }}
                 >
                   NO TICKET SOLD!
                 </motion.h1>
                 <motion.p 
-                  className="text-4xl font-semibold text-foreground relative z-10"
+                  className="text-2xl md:text-3xl font-semibold text-foreground relative z-10"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
