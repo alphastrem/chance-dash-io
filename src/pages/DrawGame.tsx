@@ -134,12 +134,12 @@ export default function DrawGame() {
       setWinnerCheckTimeout(null);
     }
     
-    setPhase('countdown');
     setCurrentDigitIndex(0);
     setRevealedDigits([]);
     setWinningNumber(null);
     setWinner(null);
     generateWheels(maxTickets);
+    setPhase('spinning');
   };
 
   const fetchWinner = async () => {
@@ -291,18 +291,30 @@ export default function DrawGame() {
               animate={{ scale: 1, opacity: 1 }}
               className="space-y-8"
             >
-              <div className="bg-destructive/20 border-4 border-destructive rounded-xl p-16 relative overflow-hidden">
+              <div className="bg-gradient-to-br from-destructive/30 to-destructive/10 border-4 border-destructive rounded-2xl p-20 relative overflow-hidden shadow-2xl">
                 <motion.div
-                  className="absolute inset-0 bg-destructive/30"
-                  animate={{ opacity: [0, 1, 0] }}
-                  transition={{ duration: 0.5, repeat: 3 }}
+                  className="absolute inset-0 bg-destructive/20"
+                  animate={{ 
+                    opacity: [0, 0.6, 0],
+                    scale: [1, 1.05, 1]
+                  }}
+                  transition={{ duration: 0.6, repeat: 2 }}
                 />
-                <h1 className="text-7xl font-bold text-destructive mb-6 relative z-10">
-                  NO TICKET FOUND!
-                </h1>
-                <p className="text-3xl text-muted-foreground relative z-10">
-                  Redrawing in 2 seconds...
-                </p>
+                <motion.h1 
+                  className="text-8xl font-bold text-destructive mb-8 relative z-10"
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ duration: 0.6, repeat: 2 }}
+                >
+                  NO TICKET SOLD!
+                </motion.h1>
+                <motion.p 
+                  className="text-4xl font-semibold text-foreground relative z-10"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  Drawing again...
+                </motion.p>
               </div>
             </motion.div>
           )}
