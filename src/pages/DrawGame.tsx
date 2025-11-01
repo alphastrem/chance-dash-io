@@ -31,6 +31,7 @@ export default function DrawGame() {
   const [currentDigitIndex, setCurrentDigitIndex] = useState(0);
   const [revealedDigits, setRevealedDigits] = useState<number[]>([]);
   const [animationType, setAnimationType] = useState<string>('spinning_wheel');
+  const [winnerCheckTimeout, setWinnerCheckTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchGameData();
@@ -119,13 +120,20 @@ export default function DrawGame() {
       setCurrentDigitIndex(prev => prev + 1);
     } else {
       // All digits revealed, check for winner
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         fetchWinner();
       }, 1000);
+      setWinnerCheckTimeout(timeout);
     }
   };
 
   const handleRedraw = () => {
+    // Clear any pending winner check timeout from previous draw
+    if (winnerCheckTimeout) {
+      clearTimeout(winnerCheckTimeout);
+      setWinnerCheckTimeout(null);
+    }
+    
     setPhase('countdown');
     setCurrentDigitIndex(0);
     setRevealedDigits([]);
