@@ -102,18 +102,17 @@ export default function PlayerView() {
       if (winning) {
         setWinningNumber(winning);
         
-        const { data: ticket } = await supabase
-          .from('tickets')
-          .select('number, players(first_name, last_name)')
+        // Use public_winners view to get winner info without exposing PII
+        const { data: winner } = await supabase
+          .from('public_winners')
+          .select('first_name, last_name, ticket_number')
           .eq('game_id', gameId)
-          .eq('number', winning)
-          .single();
+          .maybeSingle();
 
-        if (ticket) {
-          const player = ticket.players as any;
+        if (winner) {
           setWinner({
-            ticket_number: ticket.number,
-            player_name: `${player.first_name} ${player.last_name}`
+            ticket_number: winner.ticket_number,
+            player_name: `${winner.first_name} ${winner.last_name}`
           });
         }
       }

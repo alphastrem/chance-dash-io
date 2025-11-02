@@ -91,7 +91,7 @@ export default function DrawGame() {
     };
   };
 
-  const generateWheels = (max: number) => {
+  const generateWheels = async (max: number) => {
     const maxStr = max.toString();
     const numDigits = maxStr.length;
     const wheelsData: number[][] = [];
@@ -104,10 +104,46 @@ export default function DrawGame() {
 
     setWheels(wheelsData);
 
-    // Generate final winning number
-    const winning = Math.floor(Math.random() * max) + 1;
-    setWinningNumber(winning);
-    setFinalDigits(winning.toString().padStart(numDigits, '0').split('').map(Number));
+    // Execute secure draw on server
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('You must be logged in to execute a draw');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('execute-draw', {
+        body: { game_id: id },
+      });
+
+      if (error) {
+        console.error('Draw execution error:', error);
+        toast.error('Failed to execute draw');
+        return;
+      }
+
+      if (!data.hasWinner) {
+        // No ticket sold for this number - trigger redraw
+        setPhase('redraw');
+        setTimeout(() => {
+          handleRedraw();
+        }, 2000);
+        return;
+      }
+
+      const winning = data.winningNumber;
+      setWinningNumber(winning);
+      setFinalDigits(winning.toString().padStart(numDigits, '0').split('').map(Number));
+      
+      setWinner({
+        ticket_number: data.winner.ticket_number,
+        player_name: data.winner.player_name,
+        player_email: data.winner.player_email,
+      });
+    } catch (error: any) {
+      console.error('Unexpected error during draw:', error);
+      toast.error('An unexpected error occurred during the draw');
+    }
   };
 
   const handleCountdownComplete = () => {
@@ -122,9 +158,9 @@ export default function DrawGame() {
     } else {
       // All digits revealed - increment to stop rendering animation
       setCurrentDigitIndex(prev => prev + 1);
-      // Check for winner after a short delay
+      // Winner is already set from generateWheels, just transition to winner phase
       const timeout = setTimeout(() => {
-        fetchWinner();
+        setPhase('winner');
       }, 1000);
       setWinnerCheckTimeout(timeout);
     }
@@ -147,64 +183,11 @@ export default function DrawGame() {
     setPhase('spinning');
   };
 
+  // This function is no longer needed as the draw is handled server-side
+  // Keeping it for backward compatibility with existing game flow
   const fetchWinner = async () => {
-    try {
-      if (!winningNumber) return;
-
-      const { data: ticket, error: ticketError } = await supabase
-        .from('tickets')
-        .select('player_id, number')
-        .eq('game_id', id)
-        .eq('number', winningNumber)
-        .single();
-
-      if (ticketError || !ticket) {
-        // No ticket found for this number - trigger redraw
-        setPhase('redraw');
-        setTimeout(() => {
-          handleRedraw();
-        }, 2000);
-        return;
-      }
-
-      const { data: player, error: playerError } = await supabase
-        .from('players')
-        .select('first_name, last_name, email')
-        .eq('id', ticket.player_id)
-        .single();
-
-      if (playerError) throw playerError;
-
-      setWinner({
-        ticket_number: ticket.number,
-        player_name: `${player.first_name} ${player.last_name}`,
-        player_email: player.email,
-      });
-
-      // Update game status to drawn
-      await supabase
-        .from('games')
-        .update({ status: 'drawn' })
-        .eq('id', id);
-
-      // Record the draw
-      await supabase
-        .from('draws')
-        .insert({
-          game_id: id,
-          winner_ticket_id: ticket.player_id,
-          algorithm: 'random',
-          audit_json: {
-            winning_number: winningNumber,
-            timestamp: new Date().toISOString(),
-          },
-        });
-
-      setPhase('winner');
-    } catch (error: any) {
-      console.error('Error fetching winner:', error);
-      toast.error('Failed to determine winner');
-    }
+    // Winner is already set by the server-side draw execution
+    setPhase('winner');
   };
 
   return (
