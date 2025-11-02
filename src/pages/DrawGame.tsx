@@ -33,11 +33,30 @@ export default function DrawGame() {
   const [animationType, setAnimationType] = useState<string>('spinning_wheel');
   const [winnerCheckTimeout, setWinnerCheckTimeout] = useState<NodeJS.Timeout | null>(null);
   const [drawKey, setDrawKey] = useState(0);
+  const [broadcastChannel, setBroadcastChannel] = useState<any>(null);
 
   useEffect(() => {
     fetchGameData();
     subscribeToGameUpdates();
+    setupBroadcastChannel();
   }, [id]);
+
+  const setupBroadcastChannel = () => {
+    const channel = supabase.channel(`draw-${id}`);
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        setBroadcastChannel(channel);
+        // Small delay to ensure players are subscribed
+        setTimeout(() => {
+          channel.send({
+            type: 'broadcast',
+            event: 'draw_started',
+            payload: { phase: 'countdown' }
+          });
+        }, 500);
+      }
+    });
+  };
 
   const fetchGameData = async () => {
     try {
@@ -148,6 +167,14 @@ export default function DrawGame() {
 
   const handleCountdownComplete = () => {
     setPhase('spinning');
+    // Broadcast that spinning has started
+    if (broadcastChannel) {
+      broadcastChannel.send({
+        type: 'broadcast',
+        event: 'phase_change',
+        payload: { phase: 'spinning' }
+      });
+    }
   };
 
   const handleWheelComplete = () => {
@@ -166,12 +193,24 @@ export default function DrawGame() {
     }
   };
 
-  const handleRedraw = () => {
+  const handleRedraw = async () => {
     // Clear any pending winner check timeout from previous draw
     if (winnerCheckTimeout) {
       clearTimeout(winnerCheckTimeout);
       setWinnerCheckTimeout(null);
     }
+    
+    // Broadcast redraw to players
+    if (broadcastChannel) {
+      await broadcastChannel.send({
+        type: 'broadcast',
+        event: 'phase_change',
+        payload: { phase: 'redraw' }
+      });
+    }
+    
+    // Wait a moment for visual feedback
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Increment draw key to force fresh animation state
     setDrawKey(prev => prev + 1);
@@ -179,7 +218,19 @@ export default function DrawGame() {
     setRevealedDigits([]);
     setWinningNumber(null);
     setWinner(null);
-    generateWheels(maxTickets);
+    
+    // Execute new draw
+    await generateWheels(maxTickets);
+    
+    // Broadcast spinning phase to players
+    if (broadcastChannel) {
+      await broadcastChannel.send({
+        type: 'broadcast',
+        event: 'phase_change',
+        payload: { phase: 'spinning' }
+      });
+    }
+    
     setPhase('spinning');
   };
 
