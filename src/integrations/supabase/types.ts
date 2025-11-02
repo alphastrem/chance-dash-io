@@ -47,6 +47,13 @@ export type Database = {
             referencedRelation: "games"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "audit_logs_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "public_winners"
+            referencedColumns: ["game_id"]
+          },
         ]
       }
       draws: {
@@ -84,6 +91,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "games"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draws_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: true
+            referencedRelation: "public_winners"
+            referencedColumns: ["game_id"]
           },
           {
             foreignKeyName: "draws_winner_ticket_id_fkey"
@@ -178,6 +192,13 @@ export type Database = {
             referencedRelation: "games"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "players_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "public_winners"
+            referencedColumns: ["game_id"]
+          },
         ]
       }
       profiles: {
@@ -238,6 +259,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tickets_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "public_winners"
+            referencedColumns: ["game_id"]
+          },
+          {
             foreignKeyName: "tickets_player_id_fkey"
             columns: ["player_id"]
             isOneToOne: false
@@ -269,7 +297,18 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_winners: {
+        Row: {
+          draw_date: string | null
+          first_name: string | null
+          game_code: string | null
+          game_id: string | null
+          game_name: string | null
+          last_name: string | null
+          ticket_number: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
