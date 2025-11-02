@@ -1,0 +1,23 @@
+name: Deploy to Hetzner on push
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 157.90.123.20
+          username: root
+          key: ${{ secrets.VM_DEPLOY_KEY }}
+          script: |
+            update-site
