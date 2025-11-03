@@ -23,6 +23,21 @@ export default function CreateGame() {
     drawTime: '',
   });
 
+  const [prizeImage, setPrizeImage] = useState<File | null>(null);
+  const [prizeImagePreview, setPrizeImagePreview] = useState<string>('');
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPrizeImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPrizeImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   if (!isHost) {
     navigate('/dashboard');
     return null;
@@ -70,6 +85,24 @@ export default function CreateGame() {
         attempts++;
       }
 
+      // Upload prize image if provided
+      let prizeImageUrl = null;
+      if (prizeImage) {
+        const fileExt = prizeImage.name.split('.').pop();
+        const fileName = `${code6}-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('prize-images')
+          .upload(fileName, prizeImage);
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from('prize-images')
+          .getPublicUrl(fileName);
+        
+        prizeImageUrl = urlData.publicUrl;
+      }
+
       const { data, error } = await supabase
         .from('games')
         .insert({
@@ -78,8 +111,9 @@ export default function CreateGame() {
           max_tickets: maxTickets,
           draw_at: drawAt,
           code6: code6,
-          status: 'draft',
+          status: 'open',
           created_by_user_id: user!.id,
+          prize_image_url: prizeImageUrl,
         })
         .select()
         .single();
@@ -133,6 +167,29 @@ export default function CreateGame() {
                 required
                 className="mt-1"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="prizeImage">Prize Image (Optional)</Label>
+              <Input
+                id="prizeImage"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="mt-1"
+              />
+              {prizeImagePreview && (
+                <div className="mt-2">
+                  <img 
+                    src={prizeImagePreview} 
+                    alt="Prize preview" 
+                    className="w-full max-w-sm h-48 object-cover rounded-lg"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Upload an image of the prize (optional)
+              </p>
             </div>
 
             <div>

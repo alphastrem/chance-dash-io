@@ -11,9 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { ArrowLeft, Save, Trash2, Play, Lock, Award, Upload, UserPlus, Sparkles, AlertTriangle, Copy, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Play, Lock, Award, Upload, UserPlus, Sparkles, AlertTriangle, Copy, ExternalLink, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import { playerSchema, csvPlayerSchema } from '@/lib/validationSchemas';
+import CSVColumnMapper, { ColumnMapping } from '@/components/CSVColumnMapper';
 
 type GameStatus = Database['public']['Enums']['game_status'];
 
@@ -27,6 +28,13 @@ type Game = {
   created_by_user_id: string;
   max_tickets: number;
   has_manual_entries: boolean;
+  prize_image_url?: string;
+};
+
+type Winner = {
+  first_name: string;
+  last_name_protected: string;
+  ticket_number: number;
 };
 
 type Player = {
@@ -52,6 +60,7 @@ export default function ManageGame() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [winner, setWinner] = useState<Winner | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -67,6 +76,9 @@ export default function ManageGame() {
     phone: '',
   });
 
+  const [csvMappingOpen, setCsvMappingOpen] = useState(false);
+  const [csvRawData, setCsvRawData] = useState<string[][]>([]);
+
   useEffect(() => {
     if (!isHost) {
       navigate('/dashboard');
@@ -76,8 +88,24 @@ export default function ManageGame() {
       fetchGame();
       fetchPlayers();
       fetchTickets();
+      fetchWinner();
     }
   }, [id, isHost]);
+
+  const fetchWinner = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('public_winners')
+        .select('first_name, last_name_protected, ticket_number')
+        .eq('game_id', id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setWinner(data);
+    } catch (error: any) {
+      console.error('Error fetching winner:', error);
+    }
+  };
 
   const fetchGame = async () => {
     try {
@@ -296,100 +324,131 @@ export default function ManageGame() {
       return;
     }
 
+    if (game?.status === 'locked' || game?.status === 'drawn') {
+      toast.error('Cannot upload CSV when entries are locked');
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        if (!game) return;
-
         const text = event.target?.result as string;
         const lines = text.split('\n').filter(line => line.trim());
         
-        // Skip header row
-        const dataLines = lines.slice(1);
+        // Parse all rows including header
+        const allRows = lines.map(line => line.split(',').map(v => v.trim()));
         
-        // Validate CSV data
-        const validatedPlayers = [];
-        for (let i = 0; i < dataLines.length; i++) {
-          const [firstName, lastName, email, phone] = dataLines[i].split(',').map(v => v.trim());
-          
-          const validation = csvPlayerSchema.safeParse({
-            firstName,
-            lastName,
-            email,
-            phone: phone || undefined,
-          });
-
-          if (!validation.success) {
-            toast.error(`Row ${i + 2}: ${validation.error.errors[0].message}`);
-            return;
-          }
-
-          validatedPlayers.push({
-            firstName,
-            lastName,
-            email,
-            phone: phone || null,
-          });
-        }
-
-        // Check if total would exceed max tickets
-        if (tickets.length + validatedPlayers.length > game.max_tickets) {
-          toast.error(`Cannot import: would exceed maximum tickets (${game.max_tickets})`);
+        if (allRows.length < 2) {
+          toast.error('CSV must contain at least a header row and one data row');
           return;
         }
 
-        // Insert players and generate tickets
-        const existingNumbers = tickets.map(t => t.number);
-        const availableNumbers = new Set<number>();
-        for (let i = 1; i <= game.max_tickets; i++) {
-          availableNumbers.add(i);
-        }
-        existingNumbers.forEach(num => availableNumbers.delete(num));
-        const numbersArray = Array.from(availableNumbers);
-
-        for (const player of validatedPlayers) {
-          // Insert player
-          const { data: playerData, error: playerError } = await supabase
-            .from('players')
-            .insert({
-              game_id: id,
-              first_name: player.firstName,
-              last_name: player.lastName,
-              email: player.email,
-              phone: player.phone,
-            })
-            .select()
-            .single();
-
-          if (playerError) throw playerError;
-
-          // Assign sequential ticket number
-          const ticketNumber = numbersArray.shift();
-          if (!ticketNumber) throw new Error('No available ticket numbers');
-
-          // Insert ticket
-          const { error: ticketError } = await supabase
-            .from('tickets')
-            .insert({
-              game_id: id,
-              player_id: playerData.id,
-              number: ticketNumber,
-              eligible: true,
-            });
-
-          if (ticketError) throw ticketError;
-        }
-
-        toast.success(`${validatedPlayers.length} players imported with tickets`);
-        fetchPlayers();
-        fetchTickets();
+        // Open mapping dialog
+        setCsvRawData(allRows);
+        setCsvMappingOpen(true);
       } catch (error: any) {
-        console.error('Error uploading CSV:', error);
-        toast.error(error.message || 'Failed to import players');
+        console.error('Error reading CSV:', error);
+        toast.error('Failed to read CSV file');
       }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleCSVImport = async (mapping: ColumnMapping) => {
+    try {
+      if (!game) return;
+
+      // Skip header row
+      const dataRows = csvRawData.slice(1);
+      
+      // Validate and prepare players
+      const validatedPlayers = [];
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i];
+        const firstName = row[mapping.firstNameIndex];
+        const lastName = row[mapping.lastNameIndex];
+        const email = row[mapping.emailIndex];
+        const phone = mapping.phoneIndex !== null ? row[mapping.phoneIndex] : undefined;
+        
+        const validation = csvPlayerSchema.safeParse({
+          firstName,
+          lastName,
+          email,
+          phone,
+        });
+
+        if (!validation.success) {
+          toast.error(`Row ${i + 2}: ${validation.error.errors[0].message}`);
+          return;
+        }
+
+        validatedPlayers.push({
+          firstName,
+          lastName,
+          email,
+          phone: phone || null,
+        });
+      }
+
+      // Check if total would exceed max tickets
+      if (tickets.length + validatedPlayers.length > game.max_tickets) {
+        toast.error(`Cannot import: would exceed maximum tickets (${game.max_tickets})`);
+        return;
+      }
+
+      // Insert players and generate tickets
+      const existingNumbers = tickets.map(t => t.number);
+      const availableNumbers = new Set<number>();
+      for (let i = 1; i <= game.max_tickets; i++) {
+        availableNumbers.add(i);
+      }
+      existingNumbers.forEach(num => availableNumbers.delete(num));
+      const numbersArray = Array.from(availableNumbers);
+
+      for (const player of validatedPlayers) {
+        // Insert player
+        const { data: playerData, error: playerError } = await supabase
+          .from('players')
+          .insert({
+            game_id: id,
+            first_name: player.firstName,
+            last_name: player.lastName,
+            email: player.email,
+            phone: player.phone,
+          })
+          .select()
+          .single();
+
+        if (playerError) throw playerError;
+
+        // Assign sequential ticket number
+        const ticketNumber = numbersArray.shift();
+        if (!ticketNumber) throw new Error('No available ticket numbers');
+
+        // Insert ticket
+        const { error: ticketError } = await supabase
+          .from('tickets')
+          .insert({
+            game_id: id,
+            player_id: playerData.id,
+            number: ticketNumber,
+            eligible: true,
+          });
+
+        if (ticketError) throw ticketError;
+      }
+
+      toast.success(`${validatedPlayers.length} players imported with tickets`);
+      setCsvMappingOpen(false);
+      setCsvRawData([]);
+      fetchPlayers();
+      fetchTickets();
+    } catch (error: any) {
+      console.error('Error importing CSV:', error);
+      toast.error(error.message || 'Failed to import players');
+    }
   };
 
   if (loading) {
@@ -495,13 +554,24 @@ export default function ManageGame() {
             </div>
           </div>
 
+          {winner && (
+            <Card className="p-6 mb-6 bg-gradient-to-r from-primary/20 to-accent/20">
+              <div className="flex items-center gap-4">
+                <Trophy className="h-12 w-12 text-primary" />
+                <div>
+                  <h3 className="text-2xl font-bold gradient-text mb-1">Winner!</h3>
+                  <p className="text-lg font-semibold">
+                    {winner.first_name} {winner.last_name_protected}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Ticket #{winner.ticket_number}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
           <div className="flex flex-wrap gap-2 mb-6">
-            {game.status === 'draft' && (
-              <Button onClick={() => handleStatusChange('open')} className="gap-2">
-                <Play className="h-4 w-4" />
-                Open for Entries
-              </Button>
-            )}
             {game.status === 'open' && (
               <Button onClick={() => handleStatusChange('locked')} className="gap-2">
                 <Lock className="h-4 w-4" />
@@ -595,79 +665,96 @@ export default function ManageGame() {
             <TabsContent value="players" className="space-y-6">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold">Add Players</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {tickets.length} / {game.max_tickets} tickets assigned
-                    </p>
-                  </div>
-                  <div>
-                    <Input
-                      type="file"
-                      accept=".csv"
-                      onChange={handleCSVUpload}
-                      className="hidden"
-                      id="csv-upload"
-                      disabled={game.has_manual_entries}
-                    />
-                    <Label htmlFor="csv-upload" className="cursor-pointer">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="gap-2" 
-                        onClick={() => document.getElementById('csv-upload')?.click()}
-                        disabled={game.has_manual_entries}
-                      >
-                        <Upload className="h-4 w-4" />
-                        Upload CSV
-                      </Button>
-                    </Label>
-                  </div>
-                </div>
+                   <div>
+                     <h3 className="text-lg font-semibold">Add Players</h3>
+                     <p className="text-sm text-muted-foreground">
+                       {tickets.length} / {game.max_tickets} tickets assigned
+                     </p>
+                   </div>
+                   <div>
+                     <Input
+                       type="file"
+                       accept=".csv"
+                       onChange={handleCSVUpload}
+                       className="hidden"
+                       id="csv-upload"
+                       disabled={game.has_manual_entries || game.status === 'locked' || game.status === 'drawn'}
+                     />
+                     <Label htmlFor="csv-upload" className="cursor-pointer">
+                       <Button 
+                         type="button" 
+                         variant="outline" 
+                         className="gap-2" 
+                         onClick={() => document.getElementById('csv-upload')?.click()}
+                         disabled={game.has_manual_entries || game.status === 'locked' || game.status === 'drawn'}
+                       >
+                         <Upload className="h-4 w-4" />
+                         Upload CSV
+                       </Button>
+                     </Label>
+                   </div>
+                 </div>
 
-                {game.has_manual_entries && (
-                  <Alert variant="destructive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      CSV upload is disabled because manual entries have been added. This prevents ticket number conflicts.
-                    </AlertDescription>
-                  </Alert>
-                )}
+                 {game.has_manual_entries && (
+                   <Alert variant="destructive">
+                     <AlertTriangle className="h-4 w-4" />
+                     <AlertDescription>
+                       CSV upload is disabled because manual entries have been added. This prevents ticket number conflicts.
+                     </AlertDescription>
+                   </Alert>
+                 )}
+
+                 {(game.status === 'locked' || game.status === 'drawn') && (
+                   <Alert>
+                     <AlertTriangle className="h-4 w-4" />
+                     <AlertDescription>
+                       Player entries are locked. Cannot add new players or upload CSV.
+                     </AlertDescription>
+                   </Alert>
+                 )}
 
                 <p className="text-sm text-muted-foreground">
                   CSV format: FirstName, LastName, Email, Phone (optional)
                 </p>
 
-                <form onSubmit={handleAddPlayer} className="grid grid-cols-2 gap-4">
-                  <Input
-                    placeholder="First Name"
-                    value={newPlayer.firstName}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, firstName: e.target.value })}
-                    required
-                  />
-                  <Input
-                    placeholder="Last Name"
-                    value={newPlayer.lastName}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, lastName: e.target.value })}
-                    required
-                  />
-                  <Input
-                    type="email"
-                    placeholder="Email"
-                    value={newPlayer.email}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, email: e.target.value })}
-                    required
-                  />
-                  <Input
-                    placeholder="Phone (optional)"
-                    value={newPlayer.phone}
-                    onChange={(e) => setNewPlayer({ ...newPlayer, phone: e.target.value })}
-                  />
-                  <Button type="submit" className="col-span-2 gap-2">
-                    <UserPlus className="h-4 w-4" />
-                    Add Player
-                  </Button>
-                </form>
+                 <form onSubmit={handleAddPlayer} className="grid grid-cols-2 gap-4">
+                   <Input
+                     placeholder="First Name"
+                     value={newPlayer.firstName}
+                     onChange={(e) => setNewPlayer({ ...newPlayer, firstName: e.target.value })}
+                     required
+                     disabled={game.status === 'locked' || game.status === 'drawn'}
+                   />
+                   <Input
+                     placeholder="Last Name"
+                     value={newPlayer.lastName}
+                     onChange={(e) => setNewPlayer({ ...newPlayer, lastName: e.target.value })}
+                     required
+                     disabled={game.status === 'locked' || game.status === 'drawn'}
+                   />
+                   <Input
+                     type="email"
+                     placeholder="Email"
+                     value={newPlayer.email}
+                     onChange={(e) => setNewPlayer({ ...newPlayer, email: e.target.value })}
+                     required
+                     disabled={game.status === 'locked' || game.status === 'drawn'}
+                   />
+                   <Input
+                     placeholder="Phone (optional)"
+                     value={newPlayer.phone}
+                     onChange={(e) => setNewPlayer({ ...newPlayer, phone: e.target.value })}
+                     disabled={game.status === 'locked' || game.status === 'drawn'}
+                   />
+                   <Button 
+                     type="submit" 
+                     className="col-span-2 gap-2"
+                     disabled={game.status === 'locked' || game.status === 'drawn'}
+                   >
+                     <UserPlus className="h-4 w-4" />
+                     Add Player
+                   </Button>
+                 </form>
               </div>
 
               <div className="space-y-2">
@@ -707,6 +794,16 @@ export default function ManageGame() {
             </TabsContent>
           </Tabs>
         </Card>
+
+        <CSVColumnMapper
+          open={csvMappingOpen}
+          onClose={() => {
+            setCsvMappingOpen(false);
+            setCsvRawData([]);
+          }}
+          csvData={csvRawData}
+          onConfirm={handleCSVImport}
+        />
       </div>
     </div>
   );

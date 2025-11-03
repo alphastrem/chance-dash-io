@@ -119,6 +119,7 @@ export type Database = {
           id: string
           max_tickets: number
           name: string
+          prize_image_url: string | null
           revealed_seed: string | null
           status: Database["public"]["Enums"]["game_status"]
           ticket_price_minor: number
@@ -134,6 +135,7 @@ export type Database = {
           id?: string
           max_tickets?: number
           name: string
+          prize_image_url?: string | null
           revealed_seed?: string | null
           status?: Database["public"]["Enums"]["game_status"]
           ticket_price_minor?: number
@@ -149,6 +151,7 @@ export type Database = {
           id?: string
           max_tickets?: number
           name?: string
+          prize_image_url?: string | null
           revealed_seed?: string | null
           status?: Database["public"]["Enums"]["game_status"]
           ticket_price_minor?: number
@@ -304,7 +307,8 @@ export type Database = {
           game_code: string | null
           game_id: string | null
           game_name: string | null
-          last_name: string | null
+          last_name_protected: string | null
+          prize_image_url: string | null
           ticket_number: number | null
         }
         Relationships: []

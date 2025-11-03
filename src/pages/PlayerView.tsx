@@ -11,15 +11,29 @@ import FlipCounterAnimation from '@/components/animations/FlipCounterAnimation';
 import { Trophy } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+type GameStatus = 'draft' | 'open' | 'locked' | 'drawn' | 'closed';
+
+interface Game {
+  id: string;
+  name: string;
+  code6: string;
+  status: GameStatus;
+  draw_at: string;
+  created_by_user_id: string;
+  max_tickets: number;
+  prize_image_url?: string;
+}
+
 interface Winner {
   ticket_number: number;
-  player_name: string;
+  first_name: string;
+  last_name_protected: string;
 }
 
 export default function PlayerView() {
   const { code } = useParams<{ code: string }>();
   const [phase, setPhase] = useState<'waiting' | 'countdown' | 'spinning' | 'winner' | 'redraw'>('waiting');
-  const [gameName, setGameName] = useState('');
+  const [game, setGame] = useState<Game | null>(null);
   const [maxTickets, setMaxTickets] = useState(0);
   const [winningNumber, setWinningNumber] = useState<number | null>(null);
   const [winner, setWinner] = useState<Winner | null>(null);
@@ -38,25 +52,25 @@ export default function PlayerView() {
 
   const fetchGameData = async () => {
     try {
-      const { data: game, error } = await supabase
+      const { data: gameData, error } = await supabase
         .from('games')
-        .select('id, name, max_tickets, status, created_by_user_id, profiles(animation_type)')
+        .select('id, name, code6, draw_at, max_tickets, status, created_by_user_id, prize_image_url, profiles(animation_type)')
         .eq('code6', code)
         .single();
 
       if (error) throw error;
       
-      setGameId(game.id);
-      setGameName(game.name);
-      setMaxTickets(game.max_tickets);
+      setGame(gameData);
+      setGameId(gameData.id);
+      setMaxTickets(gameData.max_tickets);
       
-      const hostProfile = game.profiles as any;
+      const hostProfile = gameData.profiles as any;
       if (hostProfile?.animation_type) {
         setAnimationType(hostProfile.animation_type);
       }
 
-      if (game.status === 'drawn') {
-        fetchWinnerData(game.id);
+      if (gameData.status === 'drawn') {
+        fetchWinnerData(gameData.id);
       }
     } catch (error: any) {
       console.error('Error fetching game:', error);
@@ -154,17 +168,18 @@ export default function PlayerView() {
       if (winning) {
         setWinningNumber(winning);
         
-        // Use public_winners view to get winner info without exposing PII
+        // Use public_winners view to get winner info with GDPR protection
         const { data: winner } = await supabase
           .from('public_winners')
-          .select('first_name, last_name, ticket_number')
+          .select('first_name, last_name_protected, ticket_number')
           .eq('game_id', gameId)
           .maybeSingle();
 
         if (winner) {
           setWinner({
             ticket_number: winner.ticket_number,
-            player_name: `${winner.first_name} ${winner.last_name}`
+            first_name: winner.first_name || '',
+            last_name_protected: winner.last_name_protected || ''
           });
         }
       }
@@ -250,13 +265,25 @@ export default function PlayerView() {
     <div className="min-h-screen p-6 flex items-center justify-center bg-gradient-to-br from-background to-secondary">
       <div className="max-w-6xl w-full">
         <Card className="p-12 glass text-center">
-          <h1 className="text-5xl font-bold gradient-text mb-8">{gameName}</h1>
+          {game && <h1 className="text-5xl font-bold gradient-text mb-8">{game.name}</h1>}
 
-          {phase === 'waiting' && (
-            <div className="space-y-4">
+          {phase === 'waiting' && game && (
+            <div className="space-y-6">
+              {game.prize_image_url && (
+                <div className="mb-6">
+                  <img 
+                    src={game.prize_image_url} 
+                    alt={game.name}
+                    className="w-full max-w-md mx-auto h-64 object-cover rounded-lg shadow-lg"
+                  />
+                </div>
+              )}
               <p className="text-2xl text-muted-foreground">
                 Waiting for the draw to begin...
               </p>
+              <div className="text-4xl font-bold text-primary mt-8">
+                Code: {code}
+              </div>
             </div>
           )}
 
@@ -364,7 +391,7 @@ export default function PlayerView() {
             </motion.div>
           )}
 
-          {phase === 'winner' && winner && (
+          {phase === 'winner' && winner && game && (
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -375,10 +402,21 @@ export default function PlayerView() {
               <h2 className="text-6xl font-bold gradient-text mb-4">
                 We Have a Winner!
               </h2>
+              {game.prize_image_url && (
+                <div className="mb-6">
+                  <img 
+                    src={game.prize_image_url} 
+                    alt={game.name}
+                    className="w-full max-w-md mx-auto h-64 object-cover rounded-lg shadow-lg"
+                  />
+                </div>
+              )}
               <div className="bg-gradient-to-r from-primary/20 to-accent/20 p-8 rounded-xl">
                 <p className="text-2xl text-muted-foreground mb-2">Winning Ticket</p>
                 <p className="text-7xl font-bold gradient-text mb-6">{winner.ticket_number}</p>
-                <p className="text-3xl font-semibold">{winner.player_name}</p>
+                <p className="text-3xl font-semibold">
+                  {winner.first_name} {winner.last_name_protected}
+                </p>
               </div>
             </motion.div>
           )}

@@ -10,7 +10,7 @@ import RouletteAnimation from '@/components/animations/RouletteAnimation';
 import LotteryBallsAnimation from '@/components/animations/LotteryBallsAnimation';
 import FlipCounterAnimation from '@/components/animations/FlipCounterAnimation';
 import { toast } from 'sonner';
-import { Trophy, ArrowLeft } from 'lucide-react';
+import { Trophy, ArrowLeft, Award } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface Winner {
@@ -244,14 +244,27 @@ export default function DrawGame() {
   return (
     <div className="min-h-screen p-6 flex items-center justify-center bg-gradient-to-br from-background to-secondary">
       <div className="max-w-6xl w-full">
-        <Button
-          variant="ghost"
-          onClick={() => navigate(`/manage-game/${id}`)}
-          className="mb-6 gap-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Game
-        </Button>
+          <div className="flex items-center justify-between mb-6">
+            <Button
+              variant="ghost"
+              onClick={() => navigate(`/manage-game/${id}`)}
+              className="gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Game
+            </Button>
+            
+            {phase === 'winner' && (
+              <Button
+                variant="outline"
+                onClick={handleRedraw}
+                className="gap-2"
+              >
+                <Award className="h-4 w-4" />
+                Redraw
+              </Button>
+            )}
+          </div>
 
         <Card className="p-12 glass text-center">
           {phase === 'countdown' && (
