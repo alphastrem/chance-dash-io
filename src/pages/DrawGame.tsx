@@ -141,24 +141,22 @@ export default function DrawGame() {
         return;
       }
 
-      if (!data.hasWinner) {
-        // No ticket sold for this number - trigger redraw
-        setPhase('redraw');
-        setTimeout(() => {
-          handleRedraw();
-        }, 2000);
-        return;
-      }
-
+      // Always set the winning number and digits for animation
       const winning = data.winningNumber;
       setWinningNumber(winning);
       setFinalDigits(winning.toString().padStart(numDigits, '0').split('').map(Number));
       
-      setWinner({
-        ticket_number: data.winner.ticket_number,
-        player_name: data.winner.player_name,
-        player_email: data.winner.player_email,
-      });
+      // Store the winner info but don't check until animation completes
+      if (data.hasWinner) {
+        setWinner({
+          ticket_number: data.winner.ticket_number,
+          player_name: data.winner.player_name,
+          player_email: data.winner.player_email,
+        });
+      } else {
+        // Mark that we need to redraw after animation
+        setWinner(null);
+      }
     } catch (error: any) {
       console.error('Unexpected error during draw:', error);
       toast.error('An unexpected error occurred during the draw');
@@ -185,9 +183,17 @@ export default function DrawGame() {
     } else {
       // All digits revealed - increment to stop rendering animation
       setCurrentDigitIndex(prev => prev + 1);
-      // Winner is already set from generateWheels, just transition to winner phase
+      // NOW check if we have a winner after animation completes
       const timeout = setTimeout(() => {
-        setPhase('winner');
+        if (winner) {
+          setPhase('winner');
+        } else {
+          // No winner - show redraw message
+          setPhase('redraw');
+          setTimeout(() => {
+            handleRedraw();
+          }, 2000);
+        }
       }, 1000);
       setWinnerCheckTimeout(timeout);
     }

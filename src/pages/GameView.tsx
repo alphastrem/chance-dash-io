@@ -5,8 +5,9 @@ import type { Database } from '@/integrations/supabase/types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Coins, Users } from 'lucide-react';
+import { ArrowLeft, Calendar, Coins, Users, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 
 type GameStatus = Database['public']['Enums']['game_status'];
 
@@ -18,12 +19,21 @@ type Game = {
   ticket_price_minor: number;
   draw_at: string;
   created_at: string;
+  prize_image_url?: string;
+};
+
+type Winner = {
+  first_name: string;
+  last_name_protected: string;
+  ticket_number: number;
+  draw_date: string;
 };
 
 export default function GameView() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const [game, setGame] = useState<Game | null>(null);
+  const [winner, setWinner] = useState<Winner | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +57,11 @@ export default function GameView() {
         setGame(null);
       } else {
         setGame(data);
+        
+        // Fetch winner if game is drawn
+        if (data.status === 'drawn') {
+          fetchWinner(data.id);
+        }
       }
     } catch (error: any) {
       console.error('Error fetching game:', error);
@@ -56,14 +71,20 @@ export default function GameView() {
     }
   };
 
-  const getStatusColor = (status: GameStatus) => {
-    switch (status) {
-      case 'draft': return 'secondary';
-      case 'open': return 'default';
-      case 'locked': return 'outline';
-      case 'drawn': return 'default';
-      case 'closed': return 'secondary';
-      default: return 'secondary';
+  const fetchWinner = async (gameId: string) => {
+    try {
+      const { data: winnerData, error: winnerError } = await supabase
+        .from('public_winners')
+        .select('first_name, last_name_protected, ticket_number, draw_date')
+        .eq('game_id', gameId)
+        .maybeSingle();
+
+      if (winnerError) throw winnerError;
+      if (winnerData) {
+        setWinner(winnerData);
+      }
+    } catch (error: any) {
+      console.error('Error fetching winner:', error);
     }
   };
 
@@ -94,6 +115,64 @@ export default function GameView() {
     );
   }
 
+  // If game is drawn, show winner screen similar to PlayerView
+  if (game.status === 'drawn' && winner) {
+    return (
+      <div className="min-h-screen p-6 flex items-center justify-center bg-gradient-to-br from-background to-secondary">
+        <div className="max-w-6xl w-full">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="mb-6 gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Home
+          </Button>
+
+          <Card className="p-12 glass text-center">
+            <h1 className="text-5xl font-bold gradient-text mb-8">{game.name}</h1>
+            
+            <motion.div
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="space-y-8"
+            >
+              <Trophy className="h-32 w-32 mx-auto text-primary animate-pulse-glow" />
+              <h2 className="text-6xl font-bold gradient-text mb-4">
+                We Have a Winner!
+              </h2>
+              
+              {game.prize_image_url && (
+                <div className="mb-6">
+                  <img 
+                    src={game.prize_image_url} 
+                    alt={game.name}
+                    className="w-full max-w-md mx-auto h-64 object-cover rounded-lg shadow-lg"
+                  />
+                </div>
+              )}
+              
+              <div className="bg-gradient-to-r from-primary/20 to-accent/20 p-8 rounded-xl">
+                <p className="text-2xl text-muted-foreground mb-2">Winning Ticket</p>
+                <p className="text-7xl font-bold gradient-text mb-6">{winner.ticket_number}</p>
+                <p className="text-3xl font-semibold mb-4">
+                  {winner.first_name} {winner.last_name_protected}
+                </p>
+                {winner.draw_date && (
+                  <p className="text-lg text-muted-foreground">
+                    Drawn on {new Date(winner.draw_date).toLocaleDateString()} at {new Date(winner.draw_date).toLocaleTimeString()}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // For other statuses, show game info
   return (
     <div className="min-h-screen p-6">
       <div className="max-w-4xl mx-auto">
@@ -114,10 +193,20 @@ export default function GameView() {
                 Game Code: {game.code6}
               </p>
             </div>
-            <Badge variant={getStatusColor(game.status)} className="text-lg px-4 py-2">
+            <Badge variant="outline" className="text-lg px-4 py-2">
               {game.status}
             </Badge>
           </div>
+
+          {game.prize_image_url && (
+            <div className="mb-6">
+              <img 
+                src={game.prize_image_url} 
+                alt={game.name}
+                className="w-full max-w-2xl mx-auto h-96 object-cover rounded-lg shadow-lg"
+              />
+            </div>
+          )}
 
           <div className="grid md:grid-cols-3 gap-6 mb-8">
             <div className="flex items-center gap-3">
@@ -153,19 +242,17 @@ export default function GameView() {
             </div>
           </div>
 
-          {game.status === 'draft' && (
-            <div className="bg-muted/50 rounded-lg p-6 text-center">
-              <p className="text-muted-foreground">
-                This game is in draft mode and not yet open for entries.
-              </p>
-            </div>
-          )}
-
           {game.status === 'open' && (
             <div className="text-center">
-              <Button size="lg" className="gap-2">
-                Buy Tickets
-              </Button>
+              <p className="text-muted-foreground mb-4">This game is open for entries</p>
+            </div>
+          )}
+          
+          {game.status === 'locked' && (
+            <div className="bg-muted/50 rounded-lg p-6 text-center">
+              <p className="text-muted-foreground">
+                Entries are locked. Waiting for the draw to begin...
+              </p>
             </div>
           )}
         </Card>

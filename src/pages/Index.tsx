@@ -12,7 +12,7 @@ export default function Index() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (gameCode.length === 6) {
-      navigate(`/game/${gameCode}`);
+      navigate(`/player/${gameCode}`);
     }
   };
 

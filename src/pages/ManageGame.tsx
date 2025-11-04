@@ -365,12 +365,29 @@ export default function ManageGame() {
       
       // Validate and prepare players
       const validatedPlayers = [];
+      const usedTicketNumbers = new Set(tickets.map(t => t.number));
+      
       for (let i = 0; i < dataRows.length; i++) {
         const row = dataRows[i];
         const firstName = row[mapping.firstNameIndex];
         const lastName = row[mapping.lastNameIndex];
         const email = row[mapping.emailIndex];
         const phone = mapping.phoneIndex !== null ? row[mapping.phoneIndex] : undefined;
+        const ticketNumberStr = row[mapping.ticketNumberIndex];
+        const ticketNumber = parseInt(ticketNumberStr);
+        
+        // Validate ticket number
+        if (isNaN(ticketNumber) || ticketNumber < 1 || ticketNumber > game.max_tickets) {
+          toast.error(`Row ${i + 2}: Invalid ticket number "${ticketNumberStr}". Must be between 1 and ${game.max_tickets}`);
+          return;
+        }
+        
+        if (usedTicketNumbers.has(ticketNumber)) {
+          toast.error(`Row ${i + 2}: Ticket number ${ticketNumber} is already in use`);
+          return;
+        }
+        
+        usedTicketNumbers.add(ticketNumber);
         
         const validation = csvPlayerSchema.safeParse({
           firstName,
@@ -389,6 +406,7 @@ export default function ManageGame() {
           lastName,
           email,
           phone: phone || null,
+          ticketNumber,
         });
       }
 
@@ -398,15 +416,7 @@ export default function ManageGame() {
         return;
       }
 
-      // Insert players and generate tickets
-      const existingNumbers = tickets.map(t => t.number);
-      const availableNumbers = new Set<number>();
-      for (let i = 1; i <= game.max_tickets; i++) {
-        availableNumbers.add(i);
-      }
-      existingNumbers.forEach(num => availableNumbers.delete(num));
-      const numbersArray = Array.from(availableNumbers);
-
+      // Insert players with their specified ticket numbers
       for (const player of validatedPlayers) {
         // Insert player
         const { data: playerData, error: playerError } = await supabase
@@ -423,17 +433,13 @@ export default function ManageGame() {
 
         if (playerError) throw playerError;
 
-        // Assign sequential ticket number
-        const ticketNumber = numbersArray.shift();
-        if (!ticketNumber) throw new Error('No available ticket numbers');
-
-        // Insert ticket
+        // Insert ticket with specified number from CSV
         const { error: ticketError } = await supabase
           .from('tickets')
           .insert({
             game_id: id,
             player_id: playerData.id,
-            number: ticketNumber,
+            number: player.ticketNumber,
             eligible: true,
           });
 
@@ -594,6 +600,12 @@ export default function ManageGame() {
                   Add players and tickets before starting the draw
                 </AlertDescription>
               </Alert>
+            )}
+            {game.status === 'drawn' && (
+              <Button onClick={() => handleStatusChange('locked')} variant="outline" className="gap-2">
+                <Lock className="h-4 w-4" />
+                Reopen for Redraw
+              </Button>
             )}
           </div>
 

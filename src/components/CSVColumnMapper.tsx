@@ -18,6 +18,7 @@ export interface ColumnMapping {
   lastNameIndex: number;
   emailIndex: number;
   phoneIndex: number | null;
+  ticketNumberIndex: number;
 }
 
 export default function CSVColumnMapper({ open, onClose, csvData, onConfirm }: CSVColumnMapperProps) {
@@ -26,6 +27,7 @@ export default function CSVColumnMapper({ open, onClose, csvData, onConfirm }: C
     lastNameIndex: -1,
     emailIndex: -1,
     phoneIndex: null,
+    ticketNumberIndex: -1,
   });
 
   if (csvData.length === 0) return null;
@@ -34,13 +36,13 @@ export default function CSVColumnMapper({ open, onClose, csvData, onConfirm }: C
   const sampleRow = csvData[1] || [];
 
   const handleConfirm = () => {
-    if (mapping.firstNameIndex === -1 || mapping.lastNameIndex === -1 || mapping.emailIndex === -1) {
+    if (mapping.firstNameIndex === -1 || mapping.lastNameIndex === -1 || mapping.emailIndex === -1 || mapping.ticketNumberIndex === -1) {
       return;
     }
     onConfirm(mapping);
   };
 
-  const isValid = mapping.firstNameIndex !== -1 && mapping.lastNameIndex !== -1 && mapping.emailIndex !== -1;
+  const isValid = mapping.firstNameIndex !== -1 && mapping.lastNameIndex !== -1 && mapping.emailIndex !== -1 && mapping.ticketNumberIndex !== -1;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -59,7 +61,7 @@ export default function CSVColumnMapper({ open, onClose, csvData, onConfirm }: C
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Required fields: First Name, Last Name, Email. Phone is optional.
+              Required fields: First Name, Last Name, Email, Ticket Number. Phone is optional.
             </AlertDescription>
           </Alert>
 
@@ -120,6 +122,25 @@ export default function CSVColumnMapper({ open, onClose, csvData, onConfirm }: C
                 onValueChange={(val) => setMapping({ ...mapping, emailIndex: parseInt(val) })}
               >
                 <SelectTrigger id="email">
+                  <SelectValue placeholder="Select column" />
+                </SelectTrigger>
+                <SelectContent>
+                  {headers.map((header, idx) => (
+                    <SelectItem key={idx} value={idx.toString()}>
+                      Column {idx + 1}: {header} ({sampleRow[idx]})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ticketNumber">Ticket Number *</Label>
+              <Select
+                value={mapping.ticketNumberIndex.toString()}
+                onValueChange={(val) => setMapping({ ...mapping, ticketNumberIndex: parseInt(val) })}
+              >
+                <SelectTrigger id="ticketNumber">
                   <SelectValue placeholder="Select column" />
                 </SelectTrigger>
                 <SelectContent>
