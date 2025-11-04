@@ -43,6 +43,7 @@ export default function PlayerView() {
   const [revealedDigits, setRevealedDigits] = useState<number[]>([]);
   const [animationType, setAnimationType] = useState<string>('spinning_wheel');
   const [gameId, setGameId] = useState<string>('');
+  const [ticketsSold, setTicketsSold] = useState<number>(0);
 
   useEffect(() => {
     fetchGameData();
@@ -68,6 +69,14 @@ export default function PlayerView() {
       if (hostProfile?.animation_type) {
         setAnimationType(hostProfile.animation_type);
       }
+
+      // Fetch ticket count
+      const { count } = await supabase
+        .from('tickets')
+        .select('*', { count: 'exact', head: true })
+        .eq('game_id', gameData.id);
+      
+      setTicketsSold(count || 0);
 
       if (gameData.status === 'drawn') {
         fetchWinnerData(gameData.id);
@@ -268,21 +277,50 @@ export default function PlayerView() {
           {game && <h1 className="text-5xl font-bold gradient-text mb-8">{game.name}</h1>}
 
           {phase === 'waiting' && game && (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {game.prize_image_url && (
-                <div className="mb-6">
+                <div className="mb-8">
                   <img 
                     src={game.prize_image_url} 
                     alt={game.name}
-                    className="w-full max-w-md mx-auto h-64 object-cover rounded-lg shadow-lg"
+                    className="w-full max-w-2xl mx-auto h-80 object-cover rounded-lg shadow-xl"
                   />
                 </div>
               )}
-              <p className="text-2xl text-muted-foreground">
-                Waiting for the draw to begin...
-              </p>
-              <div className="text-4xl font-bold text-primary mt-8">
-                Code: {code}
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto text-left">
+                <Card className="p-6 glass">
+                  <div className="text-sm text-muted-foreground mb-2">Draw Date & Time</div>
+                  <div className="text-2xl font-bold text-primary">
+                    {new Date(game.draw_at).toLocaleDateString('en-GB', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </div>
+                  <div className="text-xl text-foreground mt-1">
+                    {new Date(game.draw_at).toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </Card>
+                
+                <Card className="p-6 glass">
+                  <div className="text-sm text-muted-foreground mb-2">Tickets Sold</div>
+                  <div className="text-4xl font-bold gradient-text">
+                    {ticketsSold} <span className="text-2xl text-muted-foreground">/ {game.max_tickets}</span>
+                  </div>
+                </Card>
+              </div>
+
+              <div className="mt-8">
+                <p className="text-2xl text-muted-foreground mb-4">
+                  Waiting for the draw to begin...
+                </p>
+                <div className="text-3xl font-bold text-primary">
+                  Game Code: {code}
+                </div>
               </div>
             </div>
           )}
