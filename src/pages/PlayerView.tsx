@@ -8,8 +8,10 @@ import SlotMachineAnimation from '@/components/animations/SlotMachineAnimation';
 import RouletteAnimation from '@/components/animations/RouletteAnimation';
 import LotteryBallsAnimation from '@/components/animations/LotteryBallsAnimation';
 import FlipCounterAnimation from '@/components/animations/FlipCounterAnimation';
-import { Trophy } from 'lucide-react';
+import { Trophy, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 type GameStatus = 'draft' | 'open' | 'locked' | 'drawn' | 'closed';
 
@@ -32,6 +34,7 @@ interface Winner {
 
 export default function PlayerView() {
   const { code } = useParams<{ code: string }>();
+  const navigate = useNavigate();
   const [phase, setPhase] = useState<'waiting' | 'countdown' | 'spinning' | 'winner' | 'redraw'>('waiting');
   const [game, setGame] = useState<Game | null>(null);
   const [maxTickets, setMaxTickets] = useState(0);
@@ -44,16 +47,27 @@ export default function PlayerView() {
   const [animationType, setAnimationType] = useState<string>('spinning_wheel');
   const [gameId, setGameId] = useState<string>('');
   const [ticketsSold, setTicketsSold] = useState<number>(0);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    fetchGameData();
-    subscribeToGameStatus();
-    subscribeToDrawEvents();
+    if (code) {
+      console.log('PlayerView mounted with code:', code);
+      fetchGameData();
+      subscribeToGameStatus();
+    }
   }, [code]);
+
+  useEffect(() => {
+    if (gameId) {
+      console.log('Setting up draw events subscription for gameId:', gameId);
+      subscribeToDrawEvents();
+    }
+  }, [gameId]);
 
   const fetchGameData = async () => {
     if (!code) {
       console.error('No game code provided');
+      setError('No game code provided');
       return;
     }
     
@@ -63,11 +77,18 @@ export default function PlayerView() {
         .from('games')
         .select('id, name, code6, draw_at, max_tickets, status, created_by_user_id, prize_image_url, profiles(animation_type)')
         .eq('code6', code)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching game:', error);
+        setError('Failed to load game');
         throw error;
+      }
+      
+      if (!gameData) {
+        console.error('Game not found with code:', code);
+        setError('Game not found');
+        return;
       }
       
       console.log('Game data loaded:', gameData);
@@ -121,8 +142,6 @@ export default function PlayerView() {
   };
 
   const subscribeToDrawEvents = () => {
-    if (!gameId) return;
-    
     const channel = supabase
       .channel(`draw-${gameId}`)
       .on('broadcast', { event: 'draw_started' }, (payload) => {
@@ -146,6 +165,7 @@ export default function PlayerView() {
       .subscribe();
 
     return () => {
+      console.log('Cleaning up draw events subscription');
       supabase.removeChannel(channel);
     };
   };
@@ -282,26 +302,60 @@ export default function PlayerView() {
 
   if (!code) {
     return (
-      <div className="min-h-screen p-6 flex items-center justify-center">
-        <Card className="p-12">
-          <h1 className="text-2xl font-bold text-destructive">Invalid Game Code</h1>
+      <div className="min-h-screen p-6 flex items-center justify-center bg-gradient-to-br from-background to-secondary">
+        <Card className="p-12 max-w-md">
+          <h1 className="text-2xl font-bold text-destructive mb-4">Invalid Game Code</h1>
+          <Button onClick={() => navigate('/')} variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Go Back
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen p-6 flex items-center justify-center bg-gradient-to-br from-background to-secondary">
+        <Card className="p-12 max-w-md">
+          <h1 className="text-2xl font-bold text-destructive mb-4">{error}</h1>
+          <p className="text-muted-foreground mb-4">Code: {code}</p>
+          <Button onClick={() => navigate('/')} variant="outline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Go Back
+          </Button>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen p-6 flex items-center justify-center bg-gradient-to-br from-background to-secondary">
+    <div className="min-h-screen p-4 md:p-6 flex items-center justify-center bg-gradient-to-br from-background via-secondary to-accent/10">
+      <Button 
+        onClick={() => navigate('/')}
+        variant="outline"
+        size="sm"
+        className="absolute top-4 left-4 z-10"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back
+      </Button>
+      
       <div className="max-w-6xl w-full">
-        <Card className="p-12 text-center bg-card border-border shadow-xl">
+        <Card className="p-6 md:p-12 text-center shadow-2xl border-2">
           {!game && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full mx-auto"
+              />
               <h2 className="text-2xl font-bold">Loading game...</h2>
               <p className="text-muted-foreground">Game Code: {code}</p>
             </div>
           )}
           
-          {game && <h1 className="text-5xl font-bold gradient-text mb-8">{game.name}</h1>}
+          {game && <h1 className="text-4xl md:text-5xl font-bold gradient-text mb-8">{game.name}</h1>}
 
           {phase === 'waiting' && game && (
             <div className="space-y-8">
