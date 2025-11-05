@@ -52,15 +52,25 @@ export default function PlayerView() {
   }, [code]);
 
   const fetchGameData = async () => {
+    if (!code) {
+      console.error('No game code provided');
+      return;
+    }
+    
     try {
+      console.log('Fetching game with code:', code);
       const { data: gameData, error } = await supabase
         .from('games')
         .select('id, name, code6, draw_at, max_tickets, status, created_by_user_id, prize_image_url, profiles(animation_type)')
         .eq('code6', code)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching game:', error);
+        throw error;
+      }
       
+      console.log('Game data loaded:', gameData);
       setGame(gameData);
       setGameId(gameData.id);
       setMaxTickets(gameData.max_tickets);
@@ -270,10 +280,27 @@ export default function PlayerView() {
     }
   }, [winner, phase, revealedDigits.length, finalDigits.length]);
 
+  if (!code) {
+    return (
+      <div className="min-h-screen p-6 flex items-center justify-center">
+        <Card className="p-12">
+          <h1 className="text-2xl font-bold text-destructive">Invalid Game Code</h1>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-6 flex items-center justify-center bg-gradient-to-br from-background to-secondary">
       <div className="max-w-6xl w-full">
-        <Card className="p-12 glass text-center">
+        <Card className="p-12 text-center bg-card border-border shadow-xl">
+          {!game && (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold">Loading game...</h2>
+              <p className="text-muted-foreground">Game Code: {code}</p>
+            </div>
+          )}
+          
           {game && <h1 className="text-5xl font-bold gradient-text mb-8">{game.name}</h1>}
 
           {phase === 'waiting' && game && (
